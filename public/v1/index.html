@@ -1,0 +1,79 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Warehouse Digital Twin | 3D robot fleet simulation</title><meta name="description" content="Three.js warehouse digital twin with autonomous robots using A* pathfinding and live KPIs. Simulated data.">
+<style>
+:root{--t:#eaf0ff;--m:#93a0c4;--a:#ffb020;--b:#38bdf8;--p:#0d1428cc;--l:#26335c}
+*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;font:14px/1.45 system-ui,sans-serif;color:var(--t);background:#070b16}
+#c{position:fixed;inset:0;width:100%;height:100%}
+.hud{position:fixed;background:var(--p);backdrop-filter:blur(10px);border:1px solid var(--l);border-radius:14px;padding:14px 16px}
+.title{top:16px;left:16px;max-width:340px}.title h1{margin:0;font-size:1.25rem}.title h1 span{color:var(--a)}.title p{margin:4px 0 0;color:var(--m);font-size:.82rem}
+.kpis{top:16px;right:16px;display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:10px}
+.k .v{font-size:1.5rem;font-weight:700}.k .l{font-size:.75rem;color:var(--m);text-transform:uppercase;letter-spacing:.06em}
+.ctrl{bottom:16px;left:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+button{font:inherit;font-weight:600;padding:8px 14px;border-radius:10px;border:1px solid var(--l);background:#16203f;color:var(--t);cursor:pointer}button.p{background:var(--a);color:#221500;border:0}
+button:focus-visible,input:focus-visible{outline:2px solid var(--b);outline-offset:2px}
+label{color:var(--m);font-size:.82rem;display:flex;gap:6px;align-items:center}
+.feed{bottom:16px;right:16px;width:300px;max-height:220px;overflow:auto;font:12px/1.5 ui-monospace,monospace;color:var(--m)}.feed b{color:var(--b);font-weight:600}
+.tag{display:inline-block;margin-top:8px;font-size:.72rem;color:var(--a);border:1px solid #ffb02055;border-radius:99px;padding:2px 8px}
+@media(max-width:760px){.kpis{top:auto;bottom:90px;right:8px;left:8px;grid-template-columns:repeat(4,1fr);padding:10px}.k .v{font-size:1.05rem}.feed{display:none}.title{left:8px;right:8px;top:8px;max-width:none}.ctrl{left:8px;bottom:8px;right:8px}}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
+</head><body>
+<canvas id="c" aria-label="3D warehouse simulation. Drag to orbit, scroll to zoom." role="img"></canvas>
+<div class="hud title"><h1>Warehouse <span>Digital Twin</span></h1><p>Autonomous mobile robots pick orders from racks and deliver them to packing stations, planning routes with A* and yielding to each other to avoid collisions. Drag to orbit.</p><span class="tag">Simulated data</span></div>
+<div class="hud kpis" aria-live="polite">
+<div class="k"><div class="v" id="kDone">0</div><div class="l">Orders delivered</div></div>
+<div class="k"><div class="v" id="kRate">0</div><div class="l">Orders / min (sim)</div></div>
+<div class="k"><div class="v" id="kCycle">0s</div><div class="l">Avg cycle time</div></div>
+<div class="k"><div class="v" id="kUtil">0%</div><div class="l">Fleet utilisation</div></div>
+<div class="k"><div class="v" id="kYield">0</div><div class="l">Collisions avoided</div></div>
+<div class="k"><div class="v" id="kQ">0</div><div class="l">Orders queued</div></div></div>
+<div class="hud ctrl"><button class="p" id="pp" aria-pressed="false">Pause</button><button id="add">Add robot</button><button id="paths" aria-pressed="true">Hide paths</button>
+<label for="spd">Speed <input type="range" id="spd" min="0.5" max="4" step="0.5" value="1.5"></label></div>
+<div class="hud feed" id="feed" aria-label="Event log" aria-live="off"></div>
+<script type="module">
+import * as THREE from 'three';import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+const W=28,H=20,grid=[];for(let x=0;x<W;x++){grid[x]=[];for(let z=0;z<H;z++)grid[x][z]=0}
+for(let x=3;x<W-3;x+=3)for(let z=3;z<H-5;z++)if(z!==10)grid[x][z]=1,grid[x+1]&&(grid[x+1][z]=x+1<W-3?1:0);
+const stations=[[4,H-2],[11,H-2],[18,H-2],[24,H-2]];
+const r=new THREE.WebGLRenderer({canvas:c,antialias:true});r.setPixelRatio(Math.min(devicePixelRatio,2));r.shadowMap.enabled=true;
+const sc=new THREE.Scene();sc.background=new THREE.Color('#070b16');sc.fog=new THREE.Fog('#070b16',40,90);
+const cam=new THREE.PerspectiveCamera(50,1,.1,200);cam.position.set(W/2+4,24,H+18);const oc=new OrbitControls(cam,c);oc.target.set(W/2,0,H/2);oc.enableDamping=true;oc.maxPolarAngle=1.45;
+sc.add(new THREE.HemisphereLight('#bcd4ff','#1a1020',1.1));const dl=new THREE.DirectionalLight('#fff',2);dl.position.set(10,30,15);dl.castShadow=true;dl.shadow.mapSize.set(2048,2048);Object.assign(dl.shadow.camera,{left:-30,right:30,top:30,bottom:-30});sc.add(dl);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(W+6,H+6),new THREE.MeshStandardMaterial({color:'#121a30',roughness:.9}));floor.rotation.x=-Math.PI/2;floor.position.set(W/2-.5,0,H/2-.5);floor.receiveShadow=true;sc.add(floor);
+const gh=new THREE.GridHelper(Math.max(W,H)+6,Math.max(W,H)+6,'#22305a','#1a2444');gh.position.set(W/2-.5,.01,H/2-.5);sc.add(gh);
+const rackM=new THREE.MeshStandardMaterial({color:'#2b3a6b',metalness:.4,roughness:.5}),boxC=['#ffb020','#f97316','#38bdf8','#a78bfa','#34d399'];
+for(let x=0;x<W;x++)for(let z=0;z<H;z++)if(grid[x][z]){const g=new THREE.Group();const fr=new THREE.Mesh(new THREE.BoxGeometry(.9,2.6,.9),rackM);fr.position.y=1.3;fr.castShadow=true;g.add(fr);
+for(let l=0;l<3;l++)if(Math.random()>.25){const b=new THREE.Mesh(new THREE.BoxGeometry(.7,.55,.7),new THREE.MeshStandardMaterial({color:boxC[Math.random()*5|0],roughness:.7}));b.position.y=.45+l*.8;g.add(b)}g.position.set(x,0,z);sc.add(g)}
+stations.forEach(([x,z])=>{const m=new THREE.Mesh(new THREE.BoxGeometry(2.2,.9,1.2),new THREE.MeshStandardMaterial({color:'#38bdf8',emissive:'#0c4a6e'}));m.position.set(x,.45,z+.5);sc.add(m)});
+const key=(x,z)=>x+','+z,free=(x,z)=>x>=0&&z>=0&&x<W&&z<H&&!grid[x][z];
+function astar(s,g){const open=[[s,0]],came={},cost={[key(...s)]:0},h=(a)=>Math.abs(a[0]-g[0])+Math.abs(a[1]-g[1]);
+while(open.length){open.sort((a,b)=>a[1]-b[1]);const [cur]=open.shift();if(cur[0]===g[0]&&cur[1]===g[1]){const p=[cur];let k=key(...cur);while(came[k]){p.unshift(came[k]);k=key(...came[k])}return p}
+for(const[dx,dz]of[[1,0],[-1,0],[0,1],[0,-1]]){const n=[cur[0]+dx,cur[1]+dz];if(!free(...n))continue;const nc=cost[key(...cur)]+1;if(nc<(cost[key(...n)]??1e9)){cost[key(...n)]=nc;came[key(...n)]=cur;open.push([n,nc+h(n)])}}}return null}
+const pickSpots=[];for(let x=0;x<W;x++)for(let z=0;z<H;z++)if(free(x,z)&&((free(x-1,z)===false&&x>0)||(x<W-1&&grid[x+1][z])))pickSpots.push([x,z]);
+const robots=[],occ=new Map(),feedEl=document.getElementById('feed');let done=0,cycles=[],yields=0,t=0,queue=[],oid=1000,running=true,speed=1.5,showPaths=true;
+function log(s){const d=document.createElement('div');d.innerHTML=`<b>${(t|0)}s</b> ${s}`;feedEl.prepend(d);if(feedEl.children.length>40)feedEl.lastChild.remove()}
+const colors=['#ffb020','#38bdf8','#f472b6','#34d399','#a78bfa','#f97316','#facc15','#22d3ee'];
+function addRobot(){const i=robots.length;let s;do{s=[Math.random()*W|0,H-4+(Math.random()*2|0)]}while(!free(...s)||occ.has(key(...s)));
+const g=new THREE.Group(),col=colors[i%colors.length],body=new THREE.Mesh(new THREE.BoxGeometry(.7,.3,.7),new THREE.MeshStandardMaterial({color:'#e5e7eb',metalness:.3,roughness:.4}));body.position.y=.25;body.castShadow=true;g.add(body);
+const top=new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,.12,16),new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:.8}));top.position.y=.46;g.add(top);
+const cargo=new THREE.Mesh(new THREE.BoxGeometry(.5,.35,.5),new THREE.MeshStandardMaterial({color:col}));cargo.position.y=.6;cargo.visible=false;g.add(cargo);
+g.position.set(s[0],0,s[1]);sc.add(g);const line=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:col,transparent:true,opacity:.7}));sc.add(line);
+const rb={id:'AMR-'+String(i+1).padStart(2,'0'),g,cargo,line,cell:s,path:[],state:'idle',prog:0,busy:0,start:0,order:null};occ.set(key(...s),rb);robots.push(rb);log(`${rb.id} joined the fleet`)}
+function route(rb,goal){const p=astar(rb.cell,goal);rb.path=p?p.slice(1):[];rb.line.geometry.setFromPoints((p||[]).map(([x,z])=>new THREE.Vector3(x,.05,z)));rb.line.visible=showPaths}
+function step(dt){t+=dt;if(Math.random()<dt*.9)queue.push(oid++);
+for(const rb of robots){if(rb.state!=='idle')rb.busy+=dt;
+if(rb.state==='idle'&&queue.length){rb.order=queue.shift();rb.start=t;rb.state='toPick';route(rb,pickSpots[Math.random()*pickSpots.length|0]);log(`${rb.id} assigned order #${rb.order}`)}
+if(!rb.path.length&&rb.prog===0){if(rb.state==='toPick'){rb.state='picking';rb.wait=1.2}else if(rb.state==='toPack'){done++;cycles.push(t-rb.start);if(cycles.length>50)cycles.shift();rb.cargo.visible=false;log(`${rb.id} delivered #${rb.order}`);rb.state='idle';rb.line.visible=false}}
+if(rb.state==='picking'){rb.wait-=dt;if(rb.wait<=0){rb.cargo.visible=true;rb.state='toPack';const s=stations[Math.random()*4|0];route(rb,[s[0]+(Math.random()*3|0)-1,s[1]-1])}continue}
+if(rb.path.length){const n=rb.path[0],k=key(...n);if(rb.prog===0){const o=occ.get(k);if(o&&o!==rb){yields++;rb.blocked=(rb.blocked||0)+dt;if(rb.blocked>2.5){rb.blocked=0;route(rb,rb.path.at(-1));if(rb.path.length&&occ.get(key(...rb.path[0]))&&occ.get(key(...rb.path[0]))!==rb)rb.path=[]}continue}rb.blocked=0;occ.set(k,rb)}
+rb.prog+=dt*2.2;const [x0,z0]=rb.cell;rb.g.position.set(x0+(n[0]-x0)*Math.min(rb.prog,1),0,z0+(n[1]-z0)*Math.min(rb.prog,1));rb.g.rotation.y=Math.atan2(n[0]-x0,n[1]-z0);
+if(rb.prog>=1){occ.delete(key(...rb.cell));rb.cell=n;rb.path.shift();rb.prog=0}}}}
+for(let i=0;i<8;i++)addRobot();
+const $=id=>document.getElementById(id);let ui=0;
+function hud(){$('kDone').textContent=done;$('kRate').textContent=t>0?(done/t*60).toFixed(1):0;$('kCycle').textContent=cycles.length?(cycles.reduce((a,b)=>a+b,0)/cycles.length).toFixed(1)+'s':'0s';
+$('kUtil').textContent=Math.round(robots.reduce((a,r)=>a+r.busy,0)/Math.max(t*robots.length,1)*100)+'%';$('kYield').textContent=yields>>4;$('kQ').textContent=queue.length}
+$('pp').onclick=e=>{running=!running;e.target.textContent=running?'Pause':'Resume';e.target.setAttribute('aria-pressed',!running)};$('add').onclick=()=>robots.length<20&&addRobot();
+$('paths').onclick=e=>{showPaths=!showPaths;e.target.textContent=showPaths?'Hide paths':'Show paths';e.target.setAttribute('aria-pressed',showPaths);robots.forEach(r=>r.line.visible=showPaths&&r.state!=='idle')};$('spd').oninput=e=>speed=+e.target.value;
+function size(){r.setSize(innerWidth,innerHeight,false);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix()}addEventListener('resize',size);size();
+const clk=new THREE.Clock();r.setAnimationLoop(()=>{const dt=Math.min(clk.getDelta(),.05);if(running)for(let i=0;i<4;i++)step(dt*speed/4);oc.update();r.render(sc,cam);if((ui+=dt)>.3){ui=0;hud()}});
+</script></body></html>
