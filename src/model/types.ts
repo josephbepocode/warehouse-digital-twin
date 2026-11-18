@@ -102,3 +102,39 @@ export interface InventoryRow {
   binFill: number;
   status: StockStatus;
 }
+
+// ---- Dock scheduling (week 3) ----
+
+export type AppointmentStatus = 'booked' | 'checked-in' | 'in-progress' | 'done' | 'late';
+
+export interface Appointment {
+  id: string;
+  dockId: string;
+  carrier: string;
+  /** Inbound receipts go on inbound doors, outbound loads on outbound doors. */
+  direction: DockKind;
+  /** Minutes after midnight on the schedule day, on the 30-minute grid in the UI. */
+  start: number;
+  end: number;
+  /** Purchase order (inbound) or load number (outbound). */
+  reference: string;
+  trailer: string;
+  status: AppointmentStatus;
+}
+
+export interface DockRules {
+  /** Opening and closing time in minutes after midnight. */
+  open: number;
+  close: number;
+  /** Grid step in minutes. */
+  slot: number;
+  /** Minimum empty minutes between two bookings on the same door. */
+  bufferMin: number;
+}
+
+export interface DockSchedule {
+  seed: number;
+  /** ISO date of the scheduled day. */
+  date: string;
+  appointments: Appointment[];
+}

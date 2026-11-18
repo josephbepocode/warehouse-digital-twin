@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0c0c0c" />
+  <meta name="description" content="Warehouse operations platform: dock scheduling with drag-to-book slots and conflict checks, on a seeded, made-up warehouse." />
+  <title>Warehouse Ops · Dock schedule</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230c0c0c'/%3E%3Cpath d='M6 24V12l10-6 10 6v12' fill='none' stroke='%23d7e2ea' stroke-width='2.5'/%3E%3C/svg%3E" />
+</head>
+<body class="docks-page">
+  <a class="skip" href="#schedule">Skip to dock schedule</a>
+  <header class="top">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      <div>
+        <h1>Warehouse Ops</h1>
+        <p class="sub">Dock schedule · simulated warehouse, seed <span id="seed"></span>, day <span id="day"></span></p>
+      </div>
+    </div>
+    <nav aria-label="Project">
+      <a href="../">Inventory</a>
+      <a href="./" aria-current="page">Dock schedule</a>
+      <a href="../v1/">3D robot demo (v1)</a>
+      <a href="https://github.com/josephbepocode/warehouse-digital-twin">Source</a>
+    </nav>
+  </header>
+
+  <main>
+    <section aria-label="Summary" class="stats" id="stats"></section>
+
+    <section class="controls" aria-label="Schedule controls">
+      <div class="sortsel">
+        <label for="buffer">Buffer between bookings</label>
+        <select id="buffer"></select>
+      </div>
+      <button type="button" id="new-booking">New booking</button>
+      <button type="button" id="reset-seed" class="ghost">Reset to seeded day</button>
+      <ul class="legend" aria-label="Legend">
+        <li><span class="sw inbound"></span>Inbound receipt</li>
+        <li><span class="sw outbound"></span>Outbound load</li>
+        <li><span class="sw problem"></span>Breaks a rule</li>
+      </ul>
+    </section>
+
+    <p class="hint">Drag across an empty row to book a slot. Drag a booking to move it (to another door too), or drag its edges to resize. Click or press Enter on a booking to edit it. With a booking focused: arrow keys move it, Shift + arrow keys change its length.</p>
+    <p id="msg" class="msg" role="status" aria-live="polite"></p>
+
+    <section id="schedule" class="sched-wrap" aria-label="Dock schedule grid" tabindex="-1">
+      <div class="sched" id="grid"></div>
+    </section>
+
+    <section id="booking" class="panel" aria-labelledby="booking-title" hidden>
+      <h2 id="booking-title">New booking</h2>
+      <form id="booking-form" novalidate>
+        <div class="fields">
+          <label>Type
+            <select id="f-direction" name="direction">
+              <option value="inbound">Inbound receipt</option>
+              <option value="outbound">Outbound load</option>
+            </select>
+          </label>
+          <label>Door <select id="f-dock" name="dock"></select></label>
+          <label>Carrier <select id="f-carrier" name="carrier"></select></label>
+          <label>Start <input id="f-start" name="start" type="time" step="1800" required /></label>
+          <label>End <input id="f-end" name="end" type="time" step="1800" required /></label>
+          <label><span id="f-ref-label">PO number</span> <input id="f-ref" name="reference" autocomplete="off" spellcheck="false" /></label>
+          <label>Trailer <input id="f-trailer" name="trailer" autocomplete="off" spellcheck="false" /></label>
+          <label>Status <select id="f-status" name="status"></select></label>
+        </div>
+        <ul id="form-errors" class="errors" role="alert"></ul>
+        <div class="actions">
+          <button type="submit" class="primary" id="f-save">Save booking</button>
+          <button type="button" id="f-delete" class="danger" hidden>Delete</button>
+          <button type="button" id="f-cancel" class="ghost">Cancel</button>
+        </div>
+      </form>
+    </section>
+
+    <h2 class="agenda-title">All bookings</h2>
+    <div class="table-wrap">
+      <table id="agenda">
+        <caption class="sr-only">Every booking for the day, in time order.</caption>
+        <thead><tr><th scope="col">Time</th><th scope="col">Door</th><th scope="col">Type</th><th scope="col">Carrier</th><th scope="col">Reference</th><th scope="col">Trailer</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Edit</span></th></tr></thead>
+        <tbody id="agenda-body"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer>
+    <p>The schedule, carriers, POs and trailers are made up and generated in your browser from a seed. Your changes are saved in this browser only.</p>
+  </footer>
+  <script type="module" src="/src/docks.ts"></script>
+</body>
+</html>
